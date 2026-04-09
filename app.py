@@ -68,6 +68,15 @@ def gantt():
         "data": data
     })
 
+@app.route("/add_employee", methods=["POST"])
+def add_employee():
+    name = request.json["name"]
+    c = db()
+    c.execute("INSERT OR IGNORE INTO employees (name) VALUES (?)", (name,))
+    c.commit()
+    c.close()
+    return jsonify({"status": "added"})
+
 
 if __name__ == "__main__":
     app.run()
