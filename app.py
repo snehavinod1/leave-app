@@ -7,20 +7,18 @@ app = Flask(__name__)
 #  DATABASE SETUP (Render Free Plan /tmp)
 # ========================================
 
-TMP_DB = "/tmp/leave.db"   # Live DB (writable)
-LOCAL_DB = "leave.db"      # GitHub DB (initial copy)
+TMP_DB = "/tmp/leave.db"      # Live DB (writable on free plan)
+LOCAL_DB = "leave.db"         # GitHub repo copy (initial base)
 
 DB = TMP_DB
 
-# Create database on first run only
+# Create DB in /tmp on first run only
 if not os.path.exists(TMP_DB):
-    print("DB missing, creating /tmp/leave.db ...")
+    print("Database missing, creating /tmp/leave.db ...")
 
-    # If local DB exists, copy it
     if os.path.exists(LOCAL_DB):
         shutil.copy(LOCAL_DB, TMP_DB)
     else:
-        # Create new DB if no local DB found
         conn = sqlite3.connect(TMP_DB)
         cur = conn.cursor()
 
@@ -45,8 +43,10 @@ if not os.path.exists(TMP_DB):
         conn.commit()
         conn.close()
 
+
 def get_db():
     return sqlite3.connect(DB)
+
 
 # ========================================
 #  ROUTES
@@ -56,7 +56,8 @@ def get_db():
 def home():
     return render_template("index.html")
 
-# ---------- EMPLOYEES ----------
+
+# ---------------- EMPLOYEES ----------------
 @app.route("/employees")
 def employees():
     conn = get_db()
@@ -65,17 +66,8 @@ def employees():
     conn.close()
     return jsonify(rows)
 
-@app.route("/add_employee", methods=["POST"])
-def add_employee():
-    name = request.json["name"]
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("INSERT OR IGNORE INTO employees (name) VALUES (?)", (name,))
-    conn.commit()
-    conn.close()
-    return jsonify({"status": "added"})
 
-# ---------- SUBMIT LEAVE ----------
+# ---------------- ADD LEAVE ----------------
 @app.route("/add_leave", methods=["POST"])
 def add_leave():
     d = request.json
@@ -89,7 +81,8 @@ def add_leave():
     conn.close()
     return jsonify({"status": "ok"})
 
-# ---------- GANTT DATA ----------
+
+# ---------------- GANTT CHART DATA ----------------
 @app.route("/gantt")
 def gantt():
     from datetime import datetime, timedelta
@@ -98,10 +91,11 @@ def gantt():
     m = int(request.args["month"])
 
     start = datetime(y, m, 1)
-    end = (datetime(y+1,1,1) if m == 12 else datetime(y, m+1, 1)) - timedelta(days=1)
+    end = (datetime(y + 1, 1, 1) if m == 12 else datetime(y, m + 1, 1)) - timedelta(days=1)
 
     conn = get_db()
     cur = conn.cursor()
+
     rows = cur.execute("""
         SELECT e.name, l.start_date, l.end_date, l.out_station
         FROM leaves l
@@ -109,6 +103,7 @@ def gantt():
         WHERE NOT (l.end_date < ? OR l.start_date > ?)
         ORDER BY e.name
     """, (start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))).fetchall()
+
     conn.close()
 
     data = {}
@@ -126,17 +121,20 @@ def gantt():
         "data": data
     })
 
-# ---------- LIST LEAVES ----------
+
+# ---------------- LIST LEAVES ----------------
 @app.route("/list_leaves")
 def list_leaves():
     conn = get_db()
     cur = conn.cursor()
+
     rows = cur.execute("""
         SELECT l.id, e.name, l.start_date, l.end_date, l.out_station
         FROM leaves l
         JOIN employees e ON e.id = l.employee_id
         ORDER BY l.start_date DESC
     """).fetchall()
+
     conn.close()
 
     return jsonify([
@@ -146,44 +144,84 @@ def list_leaves():
             "start": r[2],
             "end": r[3],
             "out": r[4]
-        } for r in rows
+        }
+        for r in rows
     ])
 
-# ---------- DELETE LEAVE ----------
+
+# ---------------- DELETE LEAVE ----------------
 @app.route("/delete_leave/<int:leave_id>", methods=["DELETE"])
 def delete_leave(leave_id):
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("DELETE FROM leaves WHERE id=?", (leave_id,))
+    cur.execute("DELETE FROM leaves WHERE id = ?", (leave_id,))
     conn.commit()
     conn.close()
     return jsonify({"status": "deleted"})
 
-# ---------- EXPORT CSV ----------
+
+# ---------------- RESET DB (Backend only) ----------------
+@app.route("/reset_db")
+def reset_db():
+    # This route exists only for admin, not shown in UI
+    if os.path.exists(TMP_DB):
+        os.remove(TMP_DB)
+
+    if os.path.exists(LOCAL_DB):
+        shutil.copy(LOCAL_DB, TMP_DB)
+    else:
+        conn = sqlite3.connect(TMP_DB)
+        cur = conn.cursor()
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS employees (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL
+            );
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS leaves (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                employee_id INTEGER,
+                start_date TEXT NOT NULL,
+                end_date TEXT NOT NULL,
+                out_station TEXT CHECK(out_station IN ('Yes','No')),
+                FOREIGN KEY(employee_id) REFERENCES employees(id)
+            );
+        """)
+        conn.commit()
+        conn.close()
+
+    return "Database reset successfully."
+
+
+# ---------------- EXPORT CSV ----------------
 @app.route("/export_csv")
 def export_csv():
     import csv
-    export_path = "/tmp/leaves_export.csv"
+
+    path = "/tmp/leaves_export.csv"
 
     conn = get_db()
     cur = conn.cursor()
     cur.execute("""
         SELECT l.id, e.name, l.start_date, l.end_date, l.out_station
         FROM leaves l
-        JOIN employees e ON e.id = l.employee_id
+        JOIN employees e ON e.id=l.employee_id
         ORDER BY l.start_date
     """)
     rows = cur.fetchall()
     conn.close()
 
-    with open(export_path, "w", newline="") as f:
+    with open(path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["ID", "Employee Name", "Start Date", "End Date", "Out Station"])
         writer.writerows(rows)
 
-    return send_file(export_path, as_attachment=True)
+    return send_file(path, as_attachment=True)
 
-# ---------- RUN SERVER ----------
+
+# ---------------- RUN SERVER ----------------
 if __name__ == "__main__":
     app.run(debug=True)
     
