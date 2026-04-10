@@ -49,20 +49,7 @@ button:active { background:#125ea8; }
     <div class="legend-item"><div class="legend-box out"></div> Out‑Station</div>
 </div>
 
-
-
-<h3>Leave Chart</h3>
-
-<div class="card">
-    <button onclick="nav(-1)">◀</button>
-    <strong id="label"></strong>
-    <button onclick="nav(1)">▶</button>
-</div>
-
-<div id="ganttWrapper">
-    <div id="chart"></div>
-</div>
-    
+<!-- EXPORT BUTTON (correct placement) -->
 <div class="card">
     /export_csv
         Download Leave Data (CSV)
@@ -83,7 +70,18 @@ button:active { background:#125ea8; }
   <tbody></tbody>
 </table>
 
-    
+<h3>Leave Gantt Chart</h3>
+
+<div class="card">
+    <button onclick="nav(-1)">◀</button>
+    <strong id="label"></strong>
+    <button onclick="nav(1)">▶</button>
+</div>
+
+<div id="ganttWrapper">
+    <div id="chart"></div>
+</div>
+
 <script>
 let dt = new Date(), y = dt.getFullYear(), m = dt.getMonth()+1;
 
