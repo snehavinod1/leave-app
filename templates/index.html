@@ -62,7 +62,12 @@ button:active { background:#125ea8; }
 <div id="ganttWrapper">
     <div id="chart"></div>
 </div>
-
+    
+<div class="card">
+    /export_csv
+        Download Leave Data (CSV)
+    </button>
+</div>
 
 <h3>Manage Leaves</h3>
 <table id="leaveTable" border="1" style="width:100%; margin-bottom:20px;">
@@ -77,12 +82,8 @@ button:active { background:#125ea8; }
   </thead>
   <tbody></tbody>
 </table>
-    <!-- ✔ EXPORT CSV BUTTON (correct placement, works 100%) -->
-<div class="card">
-    /export_csv
-        Download Leave Data (CSV)
-    </button>
-</div>
+
+    
 <script>
 let dt = new Date(), y = dt.getFullYear(), m = dt.getMonth()+1;
 
