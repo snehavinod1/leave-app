@@ -53,12 +53,17 @@ button:active { background:#125ea8; }
     </div>
 </div>
 
+<h3>Leave Chart</h3>
+
 <div class="card">
-    /export_csv
-        Download Leave Data (CSV)
-    </button>
+    <button onclick="nav(-1)">◀</button>
+    <strong id="label"></strong>
+    <button onclick="nav(1)">▶</button>
 </div>
 
+<div id="ganttWrapper">
+    <div id="chart"></div>
+</div>
 <h3>Manage Leaves</h3>
 <table id="leaveTable" border="1" style="width:100%; margin-bottom:20px;">
   <thead>
@@ -73,16 +78,8 @@ button:active { background:#125ea8; }
   <tbody></tbody>
 </table>
 
-<h3>Leave Chart</h3>
-
 <div class="card">
-    <button onclick="nav(-1)">◀</button>
-    <strong id="label"></strong>
-    <button onclick="nav(1)">▶</button>
-</div>
-
-<div id="ganttWrapper">
-    <div id="chart"></div>
+    <button onclick="window.location.href='/export_csv'/button>
 </div>
 
 <script>
