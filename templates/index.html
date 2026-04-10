@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Leave Management </title>
+<title>Leave Management</title>
 
 <style>
 body {
@@ -10,10 +10,6 @@ body {
     background: #f4f6f8;
     margin: 0;
     padding: 12px;
-}
-
-h2, h3 {
-    margin-top: 10px;
 }
 
 .card {
@@ -99,33 +95,51 @@ button {
 
 <div class="card">
     <select id="emp"></select>
+
     <select id="out">
         <option value="No">Normal Leave</option>
         <option value="Yes">Out‑Station</option>
     </select>
+
     <div class="row">
         <input type="date" id="start">
         <input type="date" id="end">
     </div>
+
     <button onclick="save()">Submit Leave</button>
 </div>
 
 <div class="legend">
     <div class="legend-item">
-        <div class="legend-box leave"></div>
-        Normal Leave
+        <div class="legend-box leave"></div> Normal Leave
     </div>
     <div class="legend-item">
-        <div class="legend-box out"></div>
-        Out‑Station
+        <div class="legend-box out"></div> Out‑Station
     </div>
 </div>
+
+<!-- 🌟 EXPORT CSV BUTTON -->
 
 <div class="card">
     <button onclick="export_csv()">
         Download Leave Data (CSV)
     </button>
 </div>
+
+<!-- 🌟 MANAGE LEAVES TABLE -->
+<h3>Manage Leaves</h3>
+<table id="leaveTable" border="1" style="width:100%; margin-bottom:20px;">
+  <thead>
+    <tr>
+      <th>Employee</th>
+      <th>Start</th>
+      <th>End</th>
+      <th>Out Station</th>
+      <th>Action</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
 
 <h3>Leave Gantt Chart</h3>
 
@@ -140,55 +154,109 @@ button {
 </div>
 
 <script>
+let today=new Date(), y=today.getFullYear(), m=today.getMonth()+1;
 
-let today=new Date(), y=today.getFullYear(), m=today.getMonth()+1
-
+// Load employees
 fetch("/employees").then(r=>r.json()).then(d=>{
-  emp.innerHTML=d.map(e=>`<option value="${e[0]}">${e[1]}</option>`).join("")
-})
+  emp.innerHTML = d.map(e =>
+    `<option value="${e[0]}">${e[1]}</option>`
+  ).join("");
+});
 
+// Submit leave
 function save(){
- fetch("/add_leave",{method:"POST",
- headers:{"Content-Type":"application/json"},
- body:JSON.stringify({
-   employee_id:emp.value,
-   start:start.value,
-   end:end.value,
-   out:out.value
- })}).then(load)
+ fetch("/add_leave",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+        employee_id:emp.value,
+        start:start.value,
+        end:end.value,
+        out:out.value
+    })
+ }).then(()=>{
+    loadLeavesTable();
+    load();
+ });
 }
 
+// Navigate months
 function nav(d){
- m+=d
- if(m<1){m=12;y--}
- if(m>12){m=1;y++}
- load()
+ m+=d;
+ if(m<1){m=12; y--;}
+ if(m>12){m=1; y++;}
+ load();
 }
 
+// Load manage leaves table
+function loadLeavesTable(){
+ fetch("/list_leaves")
+ .then(r=>r.json())
+ .then(rows=>{
+    let html="";
+    rows.forEach(r=>{
+        html += `
+        <tr>
+          <td>${r.name}</td>
+          <td>${r.start}</td>
+          <td>${r.end}</td>
+          <td>${r.out}</td>
+          <td>
+            <button style="background:red" onclick="deleteLeave(${r.id})">Delete</button>
+          </td>
+        </tr>
+        `;
+    });
+    document.querySelector("#leaveTable tbody").innerHTML = html;
+ });
+}
+
+// Delete leave
+function deleteLeave(id){
+ if(!confirm("Delete this leave?")) return;
+ fetch(`/delete_leave/${id}`,{method:"DELETE"})
+ .then(()=>{
+    loadLeavesTable();
+    load();
+ });
+}
+
+// Load Gantt chart
 function load(){
- fetch(`/gantt?year=${y}&month=${m}`).then(r=>r.json()).then(r=>{
-  label.innerText=new Date(y,m-1).toLocaleString('default',{month:'long',year:'numeric'})
-  chart.innerHTML=""
-  let g=document.createElement("div")
-  g.className="gantt"
-  g.style.gridTemplateColumns=`120px repeat(${r.days},32px)`
+ fetch(`/gantt?year=${y}&month=${m}`)
+ .then(r=>r.json())
+ .then(r=>{
+    label.innerText = new Date(y,m-1).toLocaleString('default',{month:'long',year:'numeric'});
+    chart.innerHTML = "";
 
-  g.innerHTML+=`<div class="cell name header">Name</div>`
-  for(let i=1;i<=r.days;i++) g.innerHTML+=`<div class="cell header">${i}</div>`
+    let g = document.createElement("div");
+    g.className="gantt";
+    g.style.gridTemplateColumns = `120px repeat(${r.days},32px)`;
 
-  for(let n in r.data){
-    g.innerHTML+=`<div class="cell name">${n}</div>`
-    for(let d=1;d<=r.days;d++){
-      let date=`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`
-      let l=r.data[n].find(x=>date>=x.start&&date<=x.end)
-      g.innerHTML+=`<div class="cell ${l?l.out==='Yes'?'out':'leave':''}"></div>`
+    g.innerHTML += `<div class="cell name header">Name</div>`;
+    for(let i=1;i<=r.days;i++){
+        g.innerHTML += `<div class="cell header">${i}</div>`;
     }
-  }
-  chart.appendChild(g)
- })
+
+    for(let name in r.data){
+        g.innerHTML += `<div class="cell name">${name}</div>`;
+        for(let d=1;d<=r.days;d++){
+            let date = `${r.year}-${String(r.month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+            let l = r.data[name].find(x => date>=x.start && date<=x.end);
+            g.innerHTML += `<div class="cell ${l ? (l.out==='Yes'?'out':'leave') : ''}"></div>`;
+        }
+    }
+
+    chart.appendChild(g);
+ });
 }
-load()
+
+loadLeavesTable();
+load();
 </script>
 
 </body>
 </html>
+
+
+
