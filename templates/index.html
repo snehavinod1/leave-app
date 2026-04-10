@@ -163,6 +163,10 @@ fetch("/employees").then(r=>r.json()).then(d=>{
   ).join("");
 });
 
+function export_csv() {
+    window.location.href = "/export_csv";
+}
+    
 // Submit leave
 function save(){
  fetch("/add_leave",{
