@@ -127,20 +127,8 @@ button {
     <div id="chart"></div>
 </div>
 
-<div class="card">
-    <h3>Add Employee (Admin)</h3>
-    <input type="text" id="newEmp" placeholder="Employee Name">
-    <button onclick="addEmp()">Add</button>
-</div>
 
 <script>
-function addEmp(){
- fetch("/add_employee",{
-   method:"POST",
-   headers:{"Content-Type":"application/json"},
-   body:JSON.stringify({name:newEmp.value})
- }).then(()=>location.reload())
-}
 
 
 let today=new Date(), y=today.getFullYear(), m=today.getMonth()+1
