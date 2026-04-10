@@ -3,31 +3,34 @@ import sqlite3, os, shutil
 
 app = Flask(__name__)
 
-# ---------------------------
-#  DATABASE SETUP (PERSISTENT)
-# ---------------------------
+# ========================================
+#  DATABASE SETUP (Render Free Plan /tmp)
+# ========================================
 
-PERSISTENT_DB = "/var/data/leave.db"     # Render persistent storage
-LOCAL_DB = "leave.db"                    # DB shipped with your repo
+TMP_DB = "/tmp/leave.db"   # Live DB (writable)
+LOCAL_DB = "leave.db"      # GitHub DB (initial copy)
 
-DB = PERSISTENT_DB
+DB = TMP_DB
 
-# Create persistent DB on first deploy
-if not os.path.exists(PERSISTENT_DB):
-    os.makedirs("/var/data", exist_ok=True)
+# Create database on first run only
+if not os.path.exists(TMP_DB):
+    print("DB missing, creating /tmp/leave.db ...")
+
+    # If local DB exists, copy it
     if os.path.exists(LOCAL_DB):
-        shutil.copy(LOCAL_DB, PERSISTENT_DB)
+        shutil.copy(LOCAL_DB, TMP_DB)
     else:
-        conn = sqlite3.connect(PERSISTENT_DB)
+        # Create new DB if no local DB found
+        conn = sqlite3.connect(TMP_DB)
         cur = conn.cursor()
 
-        # Create tables
         cur.execute("""
             CREATE TABLE IF NOT EXISTS employees (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT UNIQUE NOT NULL
             );
         """)
+
         cur.execute("""
             CREATE TABLE IF NOT EXISTS leaves (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -38,24 +41,22 @@ if not os.path.exists(PERSISTENT_DB):
                 FOREIGN KEY(employee_id) REFERENCES employees(id)
             );
         """)
+
         conn.commit()
         conn.close()
-
 
 def get_db():
     return sqlite3.connect(DB)
 
-# ---------------------------
-#   ROUTES
-# ---------------------------
+# ========================================
+#  ROUTES
+# ========================================
 
 @app.route("/")
 def home():
     return render_template("index.html")
 
-
-# ----- Employees -----
-
+# ---------- EMPLOYEES ----------
 @app.route("/employees")
 def employees():
     conn = get_db()
@@ -63,7 +64,6 @@ def employees():
     rows = cur.execute("SELECT id, name FROM employees ORDER BY name").fetchall()
     conn.close()
     return jsonify(rows)
-
 
 @app.route("/add_employee", methods=["POST"])
 def add_employee():
@@ -75,9 +75,7 @@ def add_employee():
     conn.close()
     return jsonify({"status": "added"})
 
-
-# ----- Add Leave -----
-
+# ---------- SUBMIT LEAVE ----------
 @app.route("/add_leave", methods=["POST"])
 def add_leave():
     d = request.json
@@ -91,9 +89,7 @@ def add_leave():
     conn.close()
     return jsonify({"status": "ok"})
 
-
-# ----- Gantt Data -----
-
+# ---------- GANTT DATA ----------
 @app.route("/gantt")
 def gantt():
     from datetime import datetime, timedelta
@@ -102,7 +98,7 @@ def gantt():
     m = int(request.args["month"])
 
     start = datetime(y, m, 1)
-    end = (datetime(y+1,1,1) if m==12 else datetime(y, m+1, 1)) - timedelta(days=1)
+    end = (datetime(y+1,1,1) if m == 12 else datetime(y, m+1, 1)) - timedelta(days=1)
 
     conn = get_db()
     cur = conn.cursor()
@@ -130,14 +126,44 @@ def gantt():
         "data": data
     })
 
+# ---------- LIST LEAVES ----------
+@app.route("/list_leaves")
+def list_leaves():
+    conn = get_db()
+    cur = conn.cursor()
+    rows = cur.execute("""
+        SELECT l.id, e.name, l.start_date, l.end_date, l.out_station
+        FROM leaves l
+        JOIN employees e ON e.id = l.employee_id
+        ORDER BY l.start_date DESC
+    """).fetchall()
+    conn.close()
 
-# ----- CSV Export -----
+    return jsonify([
+        {
+            "id": r[0],
+            "name": r[1],
+            "start": r[2],
+            "end": r[3],
+            "out": r[4]
+        } for r in rows
+    ])
 
+# ---------- DELETE LEAVE ----------
+@app.route("/delete_leave/<int:leave_id>", methods=["DELETE"])
+def delete_leave(leave_id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM leaves WHERE id=?", (leave_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "deleted"})
+
+# ---------- EXPORT CSV ----------
 @app.route("/export_csv")
 def export_csv():
     import csv
-
-    export_path = "/var/data/leaves_export.csv"
+    export_path = "/tmp/leaves_export.csv"
 
     conn = get_db()
     cur = conn.cursor()
@@ -157,11 +183,7 @@ def export_csv():
 
     return send_file(export_path, as_attachment=True)
 
-
-# ---------------------------
-#   RUN APP
-# ---------------------------
-
+# ---------- RUN SERVER ----------
 if __name__ == "__main__":
     app.run(debug=True)
-
+    
